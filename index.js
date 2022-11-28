@@ -6,6 +6,7 @@ const { Client } = require('pg')
 const bp = require('body-parser')
 const bcrypt = require('bcrypt')
 const alert = require('alert');
+const { rows } = require('pg/lib/defaults');
 
 app.use(bp.json())
 app.use(bp.urlencoded({ extended: true }))
@@ -160,6 +161,14 @@ app.post('/login', async function(req, res){
 })
 
 //3. HOME PAGE, SHOW STORE
+app.get('/home', (req, res) => {
+    db.query('SELECT store_name, store_type from store', (err, result) => {
+        if (err){
+            throw err
+        }
+        res.send({'my_store': result.rows})
+    })
+})
 
 //4. REGISTER STORE
 /*app.get('/registerStore', (req, res)=>{
@@ -210,7 +219,6 @@ app.post('/registerStore', async function (req, res){
 })
 
 //5. ADD PRODUCTS
-//ADD PRODUCTS
 /*app.get('/addproducts', (req, res) => {
     //res.render("add_prod.ejs")
 })*/
@@ -240,26 +248,50 @@ app.post('/addProducts', async function (req, res){
     
 })
 
-//6. PRODUCT DETAILS
 
-//7. CATALOG
+//6. CATALOG
 app.get('/catalogue', (req, res) => {
-    db.query('SELECT * FROM products order by product_id asc', (err, result) => {
+    db.query('SELECT product_name, product_price, product_quantity FROM products order by product_id asc', (err, result) => {
         if (err){
             throw err
         }
-        //res.render("inventory.ejs", {'list': result.rows})
+        res.send({'product': result.rows})
     })
 })
 
-
-//8. CHECKOUT OR CART
-app.get('/checkout', (req, res) => {
-    //res.render("checkout.ejs")
+//6. PRODUCT DETAILS
+app.get('/productDetails/:id', (req, res) => {
+    var id = req.params.id
+    const query = `SELECT * FROM products WHERE product_id = '${id}'`
+    console.log(id)
+    db.query(query,(err, result) => {
+        if (err){
+            throw err
+        }
+        res.send({'selected_product': result.rows})
+    })
 })
 
+//EDIT CATALOGUE
+//DELETE PRODUCT
+app.get('/delete/:id', (req, res) => {
+    var id = req.params.id
+    db.query(`Delete from products where product_id = '${id}'`, (err, result) => {
+        if (err){
+            console.log(err)
+            return
+        }
+        console.log(result)
+    })
+    res.redirect("/catalogue")
+});
+
+
+//8. CHECKOUT OR CART
 app.all('/checkout/:id', (req, res) => {
     var id = req.params.id
+
+    //choose product
     const query2 =`select * from products where product_id = '${id}'`
     
     db.query(query2, (err, results) => {
@@ -267,24 +299,25 @@ app.all('/checkout/:id', (req, res) => {
             console.log(err)
             return
         }
-        var stok = results.rows[0].jumlah_stok
+        var stock = results.rows[0].product_quantity
+        console.log(stock)
+
+        const selected_product = results.rows[0].product_id
+        console.log(selected_product)
         
-        console.log(stok)
-        const produk = results.rows[0].id_produk
-        if(stok < 1){
-            alert("Barang tidak boleh kurang dari 0")
+        if(stock == 0){
+            alert("Product SOLD OUT")
         }
         else{
-            //const query3 =`insert into history_barang values (${produk},CURRENT_timestamp,'Penjualan',1)`
-
+            const query3 =`insert into check_out values (default, CURRENT_timestamp, '${selected_product}',)`
             db.query(query3,(err,result2)=>{
                 if(err){
                     console.log(err)
                     return
                 }
+                console.log(result2)
             })
-
-            var query4 = `update stok_barang set jumlah_stok = jumlah_stok - 1 where id_produk = '${id}'`
+            var query4 = `update products set product_quantity = product_quantity - 1 where product_id = '${id}'`
             db.query(query4, (err, result3) => {
                 if (err){
                     console.log(err)
@@ -293,30 +326,34 @@ app.all('/checkout/:id', (req, res) => {
             })
         }
     });
-    res.redirect("/inventory")
+    res.redirect("/catalogue")
 });
-
 //9. GENERATE RECEIPTS
-app.get('/generaterecipt', (req, res) => {
+/*app.get('/generaterecipt', (req, res) => {
     //res.render("receipt.ejs")
-})
+})*/
 
-app.get('/generaterecipt', (req, res) => {
-    db.query('SELECT * from checkout NATURAL JOIN products', (err, result) => {
+app.get('/generateReceipt/:id', (req, res) => {
+    var id = req.params.id
+
+    db.query(`SELECT * from checkout NATURAL JOIN products WHERE transaction_id = '${id}'`, (err, result) => {
         if (err){
             throw err
         }
+        console.log(result)
+
         const query2 = `select * from store`
-        db.query(query2,(err, rest) =>{
+        db.query(query2,(err, result) =>{
             if (err){
                 throw err
-             }
+            }
+            console.log(result)
         })
     })
 })
 
 //10. SALES ACTIVITY
-app.get('/salesactivity', (req, res) => {
+app.get('/salesActivity', (req, res) => {
     db.query('SELECT * from sales_activity NATURAL JOIN products order by product_id asc', (err, result) => {
         if (err){
             throw err
