@@ -286,10 +286,10 @@ app.get('/delete/:id', (req, res) => {
     res.redirect("/catalogue")
 });
 
-
 //8. CHECKOUT OR CART
-app.all('/checkout/:id', (req, res) => {
+app.all('/checkout/:id/:beli', (req, res) => {
     var id = req.params.id
+    var beli = req.params.beli
 
     //choose product
     const query2 =`select * from products where product_id = '${id}'`
@@ -300,80 +300,122 @@ app.all('/checkout/:id', (req, res) => {
             return
         }
         var stock = results.rows[0].product_quantity
-        console.log(stock)
+        console.log(stock) //current stock selected product
 
+        //selected product
         const selected_product = results.rows[0].product_id
-        console.log(selected_product)
-        
+        const name = results.rows[0].product_name
+        const price = results.rows[0].product_price
+        const total = beli * results.rows[0].product_price
+        console.log(name)
+
         if(stock == 0){
             alert("Product SOLD OUT")
         }
         else{
-            const query3 =`insert into check_out values (default, CURRENT_timestamp, '${selected_product}',)`
+            const query3 =`insert into check_out values (default, CURRENT_timestamp, '${selected_product}', '${name}', '${beli}', '${price}', '${total}')`
             db.query(query3,(err,result2)=>{
                 if(err){
                     console.log(err)
                     return
                 }
-                console.log(result2)
+                console.log("transaction created!")
             })
-            var query4 = `update products set product_quantity = product_quantity - 1 where product_id = '${id}'`
+            
+            var query4 = `update products set product_quantity = product_quantity - '${beli}' where product_id = '${id}'`
             db.query(query4, (err, result3) => {
                 if (err){
                     console.log(err)
                     return
                 }
+                console.log("stock updated!")
             })
         }
     });
     res.redirect("/catalogue")
 });
-//9. GENERATE RECEIPTS
-/*app.get('/generaterecipt', (req, res) => {
-    //res.render("receipt.ejs")
-})*/
 
-app.get('/generateReceipt/:id', (req, res) => {
-    var id = req.params.id
+//9. GENERATE RECEIPT
+app.get('/generateReceipt/:store_id/:id', (req, res) => {
+    var id = req.params.id //transaction id
+    var store_id = req.params.store_id
 
-    db.query(`SELECT * from checkout NATURAL JOIN products WHERE transaction_id = '${id}'`, (err, result) => {
+    db.query(`select store_name, store_address, store_number from store WHERE store_id = '${store_id}' `, (err, result) => {
         if (err){
             throw err
         }
-        console.log(result)
+        console.log({'Store': result.rows})
 
-        const query2 = `select * from store`
+        //store information
+        var str_name = result.rows[0].store_name
+        var str_address = result.rows[0].store_address
+
+        const query2 = `SELECT trans_date, product_id, product_name, quantity, product_price, total_price from check_out NATURAL JOIN products WHERE transaction_id = '${id}'`
         db.query(query2,(err, result) =>{
             if (err){
                 throw err
             }
-            console.log(result)
+            console.log("transaction found!")
+            console.log({'Transaction': result.rows})
+
+            //product information
+            //var transation = result.rows[0].trans_date
+            var prod_id = result.rows[0].product_id
+            var prod_name = result.rows[0].product_name
+            var prod_qty = result.rows[0].quantity
+            var prod_price = result.rows[0].product_price
+            var product_totalPrice = result.rows[0].total_price
+
+            const query3 =`insert into receipt values (default, '${str_name}', '${str_address}', '${prod_id}','${prod_name}', '${prod_qty}', '${prod_price}', '${product_totalPrice}')`
+            db.query(query3,(err,result)=>{
+                if(err){
+                    console.log(err)
+                    return
+                }
+                console.log("receipt created!")
+            })
+
+            const query4 =`insert into sales_activity values (default, '${prod_id}', '${prod_name}', '${prod_qty}', '${prod_price}','${product_totalPrice}')`
+            db.query(query4,(err,result)=>{
+                if(err){
+                    console.log(err)
+                    return
+                }
+                console.log("new transaction added!")
+                res.send("Receipt generated successfully")
+            })
+            
         })
+        
     })
+    
 })
 
 //10. SALES ACTIVITY
+//check_out insert ke sales activity dulu, baru bisa ditampilkan
 app.get('/salesActivity', (req, res) => {
-    db.query('SELECT * from sales_activity NATURAL JOIN products order by product_id asc', (err, result) => {
+    db.query('select product_id, product_name, quantity, product_price, total_price from sales_activity natural join check_out order by product_id asc', (err, result) => {
         if (err){
             throw err
         }
 
+        console.log(result)
+        
         for(let i = 0; i < result.rowCount; i++ ){
                 id_prod = result.rows[i].product_id               
-                //console.log(id_pro)
+                console.log(id_prod)
                     //calculating profit (total pemasukan)
-                    const query2 = `select products.product_id as id, sum(product_quantity) as total_terjual, sum(product_price) as total_pemasukan from checkout natural join products where product_id = ${id_prod}`
+                    const query2 = `select check_out.product_id as id, sum(quantity) as total_terjual, sum(total_price) as total_pemasukan from receipt natural join check_out where product_id = ${id_prod} group by check_out.product_id`
                     db.query(query2,(err, rest) =>{
                       if (err){
                           throw err
                        }
                        //console.log(rest.rows)
-                       for(let j = 0;j<rest.rowCount;j++){
+                       for(let j = 0; j<rest.rowCount; j++){
                             id = rest.rows[j].id
                             total_terj = rest.rows[j].total_terjual
                             total_pem = rest.rows[j].total_pemasukan
-                            //console.log(total_terj,total_prof)
+
                             const query3 =`update sales_activity set product_quantity = ${total_terj}, profit = ${total_pem} where product_id = ${id}`
                             db.query(query3,(err, result2) =>{
                                 if(err){
@@ -381,14 +423,15 @@ app.get('/salesActivity', (req, res) => {
                                 }
                             })
                         }
-                    })}
+                    }
+        )}
 
-        db.query(`select sum(product_quantity) as SOLD, sum(profit) as PROFIT from sales_activity`,(err, finaldata) =>{
-            console.log(finaldata.rows[0].terjual)
-            /*res.render("finance.ejs", {
-                'list': result.rows,
-                'final': finaldata.rows
-            })*/
+        db.query(`select sum(product_quantity) as sold, sum(profit) as total from sales_activity`,(err, finaldata) =>{
+            if(err){
+                console.log(err)
+            }
+            console.log(finaldata.rows[0].total)
+            res.send({'sales activity': finaldata.rows})
         })
         
     })
