@@ -41,15 +41,6 @@ app.get('/', (req, res) => {
 
 //FEATURES
 //1. REGISTER ACCOUNT
-/*app.get('/register', (req, res)=>{
-    res.render("register.ejs")
-})*/
-app.get('/register', (req, res) => {
-    res.render("register.ejs")
-})
-
-
-
 app.post('/register', async(req, res) => {
     const myName = req.body.myName
     const username = req.body.username
@@ -82,10 +73,6 @@ app.post('/register', async(req, res) => {
     else if (!isPasswordValid (req.body.password)){
         errors.push({message:"Password must 5 - 12 character and contains at least one number, uppercase and lowercase"});
     }
-
-    /*if (errors.length > 0){
-        return res.render("register.ejs", {errors})
-    } */
     
     //PASSWORD HASHING
     else {
@@ -171,10 +158,6 @@ app.get('/home', (req, res) => {
 })
 
 //4. REGISTER STORE
-/*app.get('/registerStore', (req, res)=>{
-    //res.render("login.ejs")
-})*/
-
 app.post('/registerStore', async function (req, res){
     var storeName = req.body.storeName
     var phone = req.body.phone
@@ -190,11 +173,8 @@ app.post('/registerStore', async function (req, res){
     if (phone.length > 13){
         errors.push({ message: "Please enter the correct phone number!" })
     }
-    /*if (errors.length > 0){
-        return res.render("register.ejs", {errors})
-    } */
 
-    //store name duplication
+    //check store name duplication
     db.query(`SELECT * FROM store WHERE store_name = '${storeName}'`, (err, results)=>{
         if (err){
             throw err
@@ -219,10 +199,6 @@ app.post('/registerStore', async function (req, res){
 })
 
 //5. ADD PRODUCTS
-/*app.get('/addproducts', (req, res) => {
-    //res.render("add_prod.ejs")
-})*/
-
 app.post('/addProducts', async function (req, res){
     var prodName = req.body.prodName
     var prodDesc = req.body.prodDesc
@@ -245,7 +221,6 @@ app.post('/addProducts', async function (req, res){
         });
         res.redirect("/catalog")
     }
-    
 })
 
 
@@ -392,7 +367,6 @@ app.get('/generateReceipt/:store_id/:id', (req, res) => {
 })
 
 //10. SALES ACTIVITY
-//check_out insert ke sales activity dulu, baru bisa ditampilkan
 app.get('/salesActivity', (req, res) => {
     db.query('select product_id, product_name, quantity, product_price, total_price from sales_activity natural join check_out order by product_id asc', (err, result) => {
         if (err){
@@ -402,28 +376,28 @@ app.get('/salesActivity', (req, res) => {
         console.log(result)
         
         for(let i = 0; i < result.rowCount; i++ ){
-                id_prod = result.rows[i].product_id               
-                console.log(id_prod)
-                    //calculating profit (total pemasukan)
-                    const query2 = `select check_out.product_id as id, sum(quantity) as total_terjual, sum(total_price) as total_pemasukan from receipt natural join check_out where product_id = ${id_prod} group by check_out.product_id`
-                    db.query(query2,(err, rest) =>{
-                      if (err){
-                          throw err
-                       }
-                       //console.log(rest.rows)
-                       for(let j = 0; j<rest.rowCount; j++){
-                            id = rest.rows[j].id
-                            total_terj = rest.rows[j].total_terjual
-                            total_pem = rest.rows[j].total_pemasukan
+            id_prod = result.rows[i].product_id               
+            console.log(id_prod)
+            //calculating profit (total pemasukan)
+            const query2 = `select check_out.product_id as id, sum(quantity) as total_terjual, sum(total_price) as total_pemasukan from receipt natural join check_out where product_id = ${id_prod} group by check_out.product_id`
+            db.query(query2,(err, rest) =>{
+                if (err){
+                    throw err
+                }
+                //console.log(rest.rows)
+                for(let j = 0; j<rest.rowCount; j++){
+                    id = rest.rows[j].id
+                    total_terj = rest.rows[j].total_terjual
+                    total_pem = rest.rows[j].total_pemasukan
 
-                            const query3 =`update sales_activity set product_quantity = ${total_terj}, profit = ${total_pem} where product_id = ${id}`
-                            db.query(query3,(err, result2) =>{
-                                if(err){
-                                    console.log(err)
-                                }
-                            })
+                    const query3 =`update sales_activity set product_quantity = ${total_terj}, profit = ${total_pem} where product_id = ${id}`
+                    db.query(query3,(err, result2) =>{
+                        if(err){
+                            console.log(err)
                         }
-                    }
+                    })
+                }
+            }
         )}
 
         db.query(`select sum(product_quantity) as sold, sum(profit) as total from sales_activity`,(err, finaldata) =>{
