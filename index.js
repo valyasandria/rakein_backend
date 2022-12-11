@@ -96,7 +96,7 @@ app.post('/register', async(req, res) => {
                     }
                     console.log("Your account is registered!")
                 })
-                res.redirect('/login')
+                res.send('Register Success!')
             }
         })
     }
@@ -165,6 +165,7 @@ app.post('/registerStore', async function (req, res){
     var storeType = req.body.storeType
     var storeAddress = req.body.storeAddress
 
+    console.log(storeName)
     errors = []
 
     if (!storeName || !phone ||!storeDesc || !storeType || !storeAddress){
